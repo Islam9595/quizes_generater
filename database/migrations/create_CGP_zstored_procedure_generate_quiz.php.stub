@@ -1,0 +1,140 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+
+class CreateCGPZStoredProcedureGenerateQuiz extends Migration
+{
+    /**
+     * Run the migrations.
+     *
+     * @return void
+     */
+    public function up()
+    {
+        DB::unprepared("DROP PROCEDURE IF EXISTS cgp_zstored_procedure_generate_quiz;");
+        DB::unprepared('CREATE PROCEDURE cgp_zstored_procedure_generate_quiz (
+                IN quiz_id INT,
+                IN validate INT,
+                IN number INT,
+                IN quiz_limit INT,
+                IN with_saving INT,
+                IN quiz_token Text,
+                IN db_limit INT
+            )     
+       BEGIN
+            DECLARE count_number INT DEFAULT 0;
+            DECLARE number_of_quizzes INT;
+            DECLARE db_quizzes INT;
+            DECLARE exist INT;
+            SET number_of_quizzes = 0;
+            SET exist = 0;
+            DROP table IF EXISTS questions_test;
+            CREATE TABLE questions_test (
+             question_id int,
+             section_id int);
+            SET count_number = number;
+            WHILE count_number > 0 DO
+            block_cursor: BEGIN
+           
+            DECLARE quiz_section_detail_id int DEFAULT 0;
+            DECLARE a INT;
+            DECLARE b INT;
+            DECLARE c INT;
+            
+            DECLARE count_check INT;
+            DECLARE l_generated_quiz_id INT;
+            DECLARE done_section_details INT DEFAULT FALSE;
+            
+            DECLARE myCursor CURSOR  FOR
+            SELECT  cgp_quiz_section_details.id FROM cgp_quizzes  JOIN cgp_quiz_sections ON          cgp_quizzes.id=cgp_quiz_sections.quiz_id JOIN cgp_quiz_section_details ON cgp_quiz_sections.id          = cgp_quiz_section_details.quiz_section_id
+            LEFT JOIN cgp_view_2nd_available_requested_question_difference ON cgp_quiz_section_details.id =          cgp_view_2nd_available_requested_question_difference.quiz_section_detail_id AND validate = 1
+            WHERE cgp_quizzes.id = quiz_id AND cgp_quiz_sections.admin_show =1 AND cgp_quiz_section_details.admin_show = 1 AND cgp_quiz_section_details.deleted_at IS null
+            ORDER BY CASE WHEN validate = 1 THEN 1 ELSE 0 END,          cgp_view_2nd_available_requested_question_difference.difference;
+            
+            DECLARE CONTINUE HANDLER FOR NOT FOUND SET done_section_details = true;
+            SET b = 0;
+            SET c =0;
+             OPEN myCursor;
+             myloop: LOOP
+            
+             FETCH NEXT FROM myCursor INTO quiz_section_detail_id;
+             IF done_section_details THEN
+                  LEAVE myloop;
+             END IF;
+     
+            SET a = (SELECT cgp_quiz_section_details.number as questions_number  FROM           cgp_quiz_section_details WHERE cgp_quiz_section_details.id = quiz_section_detail_id);
+            SET b = b + a;
+            
+            SET count_check = (SELECT COUNT(cgp_view_1st_quiz_section_detail_questions.question_id) FROM             cgp_view_1st_quiz_section_detail_questions JOIN cgp_quiz_section_details ON          cgp_view_1st_quiz_section_detail_questions.quiz_section_detail_id = cgp_quiz_section_details.id          WHERE cgp_quiz_section_details.id =  quiz_section_detail_id AND     cgp_view_1st_quiz_section_detail_questions.question_id NOT in  (SELECT question_id from           questions_test) ORDER BY RAND() LIMIT a); 
+            IF(a > count_check)
+            THEN
+            LEAVE myloop;
+            end if;
+            INSERT INTO questions_test(question_id,section_id)
+            SELECT DISTINCT cgp_view_1st_quiz_section_detail_questions.question_id ,          cgp_quiz_section_details.quiz_section_id FROM cgp_view_1st_quiz_section_detail_questions JOIN cgp_quiz_section_details ON cgp_view_1st_quiz_section_detail_questions.quiz_section_detail_id =      cgp_quiz_section_details.id WHERE cgp_quiz_section_details.id =  quiz_section_detail_id AND cgp_view_1st_quiz_section_detail_questions.question_id NOT in  (SELECT question_id from questions_test) ORDER BY RAND() LIMIT a;
+       
+                END LOOP;
+                CLOSE myCursor;
+                
+                SET c = (SELECT COUNT(question_id) FROM questions_test);
+                IF(c >= b)
+                THEN
+                IF NOT EXISTS(SELECT 1 FROM `questions_test` JOIN (SELECT GROUP_CONCAT(cgp_generated_quiz_questions.question_id ORDER BY cgp_generated_quiz_questions.question_id) as question_ids FROM cgp_generated_quiz_questions JOIN cgp_generated_quizzes ON       cgp_generated_quiz_questions.generated_quiz_id = cgp_generated_quizzes.id WHERE cgp_generated_quizzes.quiz_id = quiz_id GROUP BY cgp_generated_quiz_questions.generated_quiz_id) as generated_questions ON  (SELECT GROUP_CONCAT(questions_test.question_id ORDER BY         questions_test.question_id) FROM `questions_test` ) =           generated_questions.question_ids)
+                THEN
+               set db_quizzes = (SELECT count(id) from cgp_generated_quizzes WHERE cgp_generated_quizzes.quiz_id = quiz_id);
+                if ((db_limit = 0) || (db_quizzes < db_limit ))
+                THEN
+                INSERT INTO cgp_generated_quizzes (quiz_id) VALUES (quiz_id);
+                SET l_generated_quiz_id = LAST_INSERT_ID();
+                 IF(!with_saving)
+                THEN
+                UPDATE cgp_generated_quizzes SET token = quiz_token WHERE id = l_generated_quiz_id;
+                END IF;
+                 INSERT INTO cgp_generated_quiz_questions    (          generated_quiz_id,section_id,question_id) SELECT            l_generated_quiz_id,section_id,question_id FROM questions_test;
+                  IF(validate || number =1)
+                 THEN
+                 SELECT l_generated_quiz_id;
+                 END IF;
+                 End If;
+                
+SET number_of_quizzes = number_of_quizzes + 1;
+IF ( (quiz_limit > 0 && number_of_quizzes =  quiz_limit) || (db_quizzes = db_limit))
+THEN
+SELECT "exsits";
+SET count_number = 0;
+END IF;
+ELSE
+set exist = 1;
+SELECT "exsits";
+                 END IF;
+                
+                 IF(validate)
+                 THEN
+                 set count_number = 0;
+                 ELSE
+                set count_number = count_number -1;
+                 END IF;
+                 ELSE
+                set count_number = count_number -1;
+                END IF;
+            END block_cursor; 
+            TRUNCATE table questions_test;
+            IF(number_of_quizzes = 0 && count_number = 0 && exist = 0)
+            THEN
+            SELECT "false";
+            END IF;
+            END WHILE;
+            DROP table IF EXISTS questions_test;
+            END');
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * @return void
+     */
+    public function down()
+    {
+        //
+    }
+}

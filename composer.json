@@ -1,0 +1,38 @@
+{
+    "name": "ie/quiz-qenerator",
+    "description": "A demo package",
+  	"type": "library",
+  	"license": "MIT",
+	"minimum-stability": "dev",
+	"authors": [
+    	{
+ 		 "name": "Islam emam",
+      	"email": "iemam@qurtobasolutions.com"
+    	}
+  	],
+    "require": {},
+
+    "autoload": {
+    	"psr-4": {
+      		"mennaAbouelsaadat\\quizGenerator\\": "src"
+    	}
+  	},
+
+    "autoload-dev": {
+        "psr-4": {
+          "mennaAbouelsaadat\\quizGenerator\\Tests\\": "tests"
+        }
+    },
+
+ 	"extra": {
+      	"laravel": {
+          	"providers": [
+              	"mennaAbouelsaadat\\quizGenerator\\QuizGeneratorServiceProvider"
+          	]
+      	}
+  	},
+    "require-dev": {
+        "phpunit/phpunit": "^9.4",
+        "orchestra/testbench": "^6.3"
+    }
+}
