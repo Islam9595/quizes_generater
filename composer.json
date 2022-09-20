@@ -1,9 +1,6 @@
 {
     "name": "ie/quiz-qenerator",
     "description": "A demo package",
-  	"type": "library",
-  	"license": "MIT",
-	"minimum-stability": "dev",
 	"authors": [
     	{
  		 "name": "Islam emam",
